@@ -1,8 +1,5 @@
 extern crate rosc;
 
-#[macro_use]
-extern crate lazy_static;
-
 use rosc::OscPacket;
 use regex::Regex;
 
@@ -67,32 +64,15 @@ impl WindowHandler<String> for MyWindowHandler
     }
 }
 
-fn osc_handler(sock: UdpSocket, user_event_sender: UserEventSender<String>) {
-    let mut buf = [0u8; rosc::decoder::MTU];
-
-    loop {
-        match sock.recv_from(&mut buf) {
-            Ok((size, _addr)) => {
-                let packet = rosc::decoder::decode(&buf[..size]).unwrap();
-                handle_packet(packet, &user_event_sender);
-            }
-            Err(e) => {
-                println!("RX: ERR: Error receiving from socket: {}", e);
-                break;
-            }
-        }
-    }
-}
-
 fn main() -> Result<(), std::string::String> {
     //
     // Read config
     //
     let mut config = Ini::new();
-    config.load("cue_printer.ini")?;
+    config.load("osc-cue-monitor.ini")?;
 
     //
-    // Window initialization
+    // Window and font initialization
     //
     let initial_size = Vector2::new(640, 480);
     let window: Window<String> = Window::new_with_user_events(
@@ -104,22 +84,19 @@ fn main() -> Result<(), std::string::String> {
     ).unwrap();
     let user_event_sender = window.create_user_event_sender();
 
+    let font_bytes = read(&config.get("font", "path").unwrap()).unwrap();
+    let font = Font::new(&font_bytes).unwrap();
+
     //
     // OSC initialization
     //
     let sock = UdpSocket::bind(config.get("network", "bind_addr").unwrap()).unwrap();
     println!("Listening to {}", config.get("network", "bind_addr").unwrap());
 
+    let cue_regex = config.get("osc", "cue_regex").unwrap();
     thread::spawn(|| {
-        osc_handler(sock, user_event_sender);
+        osc_thread(sock, user_event_sender, cue_regex);
     });
-
-
-    //
-    // Read font
-    //
-    let font_bytes = read(&config.get("font", "path").unwrap()).unwrap();
-    let font = Font::new(&font_bytes).unwrap();
 
     //
     // Run main loop
@@ -136,21 +113,39 @@ fn main() -> Result<(), std::string::String> {
     )
 }
 
+//
+// OSC handler thread
+//
+fn osc_thread(sock: UdpSocket, user_event_sender: UserEventSender<String>, cue_regex: String) {
+    let mut buf = [0u8; rosc::decoder::MTU];
+    println!("Watching for cues matching regular expression: \"{}\"", cue_regex);
+    let re = Regex::new(&cue_regex).unwrap();
+
+    loop {
+        match sock.recv_from(&mut buf) {
+            Ok((size, _addr)) => {
+                let packet = rosc::decoder::decode(&buf[..size]).unwrap();
+                handle_packet(packet, &user_event_sender, &re);
+            }
+            Err(e) => {
+                println!("RX: ERR: Error receiving from socket: {}", e);
+                break;
+            }
+        }
+    }
+}
 
 //
-// Handle OSC packet with minimal error handling
+// Function to handle an individual received OSC packet, with minimal error handling
 //
-fn handle_packet(packet: OscPacket, user_event_sender: &UserEventSender<String>) {
+fn handle_packet(packet: OscPacket, user_event_sender: &UserEventSender<String>, re: &Regex) {
+
     match packet {
         OscPacket::Message(msg) => {
             println!("RX: INFO: Received addr {} args {:?}", msg.addr, msg.args);
 
-            lazy_static! {
-                static ref RE: Regex = Regex::new(r"^/cue/([\d\.]+)/go$").unwrap();
-            }
-            if RE.is_match(msg.addr.as_str()) {
-                let cap = RE.captures(msg.addr.as_str()).unwrap();
-
+            if re.is_match(msg.addr.as_str()) {
+                let cap = re.captures(msg.addr.as_str()).unwrap();
                 user_event_sender.send_event(cap[1].to_string()).unwrap();
             } else {
                 println!("RX: Received unknown message {:?}, ignoring", msg)

@@ -340,17 +340,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cue-display"
-version = "0.1.0"
-dependencies = [
- "configparser",
- "lazy_static",
- "regex",
- "rosc",
- "speedy2d",
-]
-
-[[package]]
 name = "darling"
 version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1066,6 +1055,17 @@ name = "once_cell"
 version = "1.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "692fcb63b64b1758029e0a96ee63e049ce8c5948587f2f7208df04625e5f6b56"
+
+[[package]]
+name = "osc-cue-monitor"
+version = "0.1.0"
+dependencies = [
+ "configparser",
+ "lazy_static",
+ "regex",
+ "rosc",
+ "speedy2d",
+]
 
 [[package]]
 name = "osmesa-sys"

@@ -1,5 +1,5 @@
 [package]
-name = "cue-display"
+name = "osc-cue-monitor"
 version = "0.1.0"
 authors = ["Carsten Koester <ckoester@cisco.com>"]
 edition = "2018"
